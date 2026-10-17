@@ -133,3 +133,88 @@ def render_cubset(
         plt.show()
     return ax.figure
 
+####################
+# The Rewrites
+####################
+
+@dataclass(frozen=True)
+class SplitX:
+    """Split the cuboid at position ``i`` along the x-axis at relative position ``t``."""
+
+    i: int
+    t: float
+
+
+@dataclass(frozen=True)
+class SplitY:
+    """Split the cuboid at position ``i`` along the y-axis at relative position ``t``."""
+
+    i: int
+    t: float
+
+
+@dataclass(frozen=True)
+class SplitZ:
+    """Split the cuboid at position ``i`` along the z-axis at relative position ``t``."""
+
+    i: int
+    t: float
+
+
+@dataclass(frozen=True)
+class AddCub:
+    """Add a cuboid at position ``(x, y, z)`` with size ``s``."""
+
+    x: float
+    y: float
+    z: float
+    s: float
+
+
+@dataclass(frozen=True)
+class AddHoleXY:
+    """Cut a hole at ``(x, y)`` with radius ``s`` in the cuboid at position ``i``."""
+
+    i: int
+    x: float
+    y: float
+    s: float
+
+
+@dataclass(frozen=True)
+class AddHoleXZ:
+    """Cut a hole at ``(x, z)`` with radius ``s`` in the cuboid at position ``i``."""
+
+    i: int
+    x: float
+    z: float
+    s: float
+
+
+@dataclass(frozen=True)
+class AddHoleYZ:
+    """Cut a hole at ``(y, z)`` with radius ``s`` in the cuboid at position ``i``."""
+
+    i: int
+    y: float
+    z: float
+    s: float
+
+
+@dataclass(frozen=True)
+class RemoveRect:
+    """Remove the cuboid at position ``i``."""
+
+    i: int
+
+
+@dataclass(frozen=True)
+class Merge:
+    """Merge the cuboids at positions ``i`` and ``j`` into a new cuboid."""
+
+    i: int
+    j: int
+
+
+Rewrite = SplitX | SplitY | SplitZ | AddCub | AddHoleXY | AddHoleXZ | AddHoleYZ | RemoveRect | Merge
+
