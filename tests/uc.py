@@ -9,12 +9,16 @@ Run it with ``uv run python tests/uc.py``.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+
+from d4d import ExtraMetrics, Grammar, ListCollection, ListSpec, StepContext
 
 ####################
 # The Object
@@ -217,4 +221,44 @@ class Merge:
 
 
 Rewrite = SplitX | SplitY | SplitZ | AddCub | AddHoleXY | AddHoleXZ | AddHoleYZ | RemoveRect | Merge
+
+####################
+# The Grammar
+####################
+
+# Grammar[TObject, TCollection, TRewrite, TState]
+class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
+    """Placeholder grammar for parametric union-cuboid objects."""
+
+    list_spec = ListSpec(
+        params_of=lambda o: [o.params],
+        with_params=lambda o, ts: replace(o, params=ts[0]),
+        names=("params",),
+    )
+
+    def initial(self) -> CubSet:
+        raise NotImplementedError
+
+    def propose(self, obj: CubSet, budget: int) -> list[Rewrite]:
+        raise NotImplementedError
+
+    def apply(self, obj: CubSet, rewrite: Rewrite) -> CubSet:
+        raise NotImplementedError
+
+    def conflicts(self, a: Rewrite, b: Rewrite) -> bool:
+        raise NotImplementedError
+
+    def apply_all(self, base: CubSet, rewrites: Sequence[Rewrite]) -> CubSet:
+        raise NotImplementedError
+
+    def loss(
+        self, batch: ListCollection[CubSet], ctx: StepContext, state: None
+    ) -> tuple[torch.Tensor, ExtraMetrics]:
+        raise NotImplementedError
+
+    def simplicity(self, batch: ListCollection[CubSet], ctx: StepContext) -> list[float]:
+        raise NotImplementedError
+
+    def config(self) -> dict[str, Any]:
+        raise NotImplementedError
 
