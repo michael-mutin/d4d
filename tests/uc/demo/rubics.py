@@ -1,7 +1,7 @@
 """Render a solved Rubik's cube.
 
-Run with ``uv run python tests/rubics.py`` and drag in the window to move the
-camera.  Add ``--save`` to also write a PNG without changing the interaction.
+Run with ``uv run python -m tests.uc.demo.rubics`` and drag in the window to
+move the camera. Add ``--save`` to also write a PNG.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import argparse
 
 import torch
 
-from uc import CubSet, render_cubset
+from .. import CubSet, render_cubset
 
 
 def solved_cube() -> CubSet:
@@ -18,12 +18,12 @@ def solved_cube() -> CubSet:
     rows: list[list[float]] = []
     coordinates = (-1.0, 0.0, 1.0)
     sticker_colors = {
-        "x-": (1.0, 0.45, 0.05),  # left: orange
-        "x+": (0.85, 0.05, 0.05),  # right: red
-        "y-": (1.0, 0.85, 0.05),  # down: yellow
-        "y+": (1.0, 1.0, 1.0),  # up: white
-        "z-": (0.05, 0.2, 0.85),  # back: blue
-        "z+": (0.05, 0.65, 0.2),  # front: green
+        "x-": (1.0, 0.45, 0.05),
+        "x+": (0.85, 0.05, 0.05),
+        "y-": (1.0, 0.85, 0.05),
+        "y+": (1.0, 1.0, 1.0),
+        "z-": (0.05, 0.2, 0.85),
+        "z+": (0.05, 0.65, 0.2),
     }
 
     for x in coordinates:
