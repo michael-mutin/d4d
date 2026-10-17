@@ -237,7 +237,13 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
     )
 
     def initial(self) -> CubSet:
-        raise NotImplementedError
+        return CubSet(
+            program="A",
+            params=torch.tensor(
+                [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5]],
+                dtype=torch.float32,
+            ),
+        )
 
     def propose(self, obj: CubSet, budget: int) -> list[Rewrite]:
         raise NotImplementedError
