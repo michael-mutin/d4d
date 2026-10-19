@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from .object import CubSet
+from .uc_object import CubSet
 
 
 def render_cubset(

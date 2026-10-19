@@ -1,9 +1,9 @@
 """Parametric union-cuboid shape grammar."""
 
-from .grammar import CubGrammar
-from .object import CubSet
-from .rendering import render_cubset
-from .rewrite import (
+from .uc_grammar import CubGrammar
+from .uc_object import CubSet
+from .uc_rendering import render_cubset
+from .uc_rewrite import (
     AddCub,
     AddHoleXY,
     AddHoleXZ,

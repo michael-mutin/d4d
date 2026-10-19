@@ -10,8 +10,8 @@ import torch
 
 from d4d import ExtraMetrics, Grammar, ListCollection, ListSpec, StepContext
 
-from .object import CubSet
-from .rewrite import AddCub, AddHoleXY, AddHoleXZ, AddHoleYZ, Merge, RemoveRect, Rewrite, SplitX, SplitY, SplitZ
+from .uc_object import CubSet
+from .uc_rewrite import AddCub, AddHoleXY, AddHoleXZ, AddHoleYZ, Merge, RemoveRect, Rewrite, SplitX, SplitY, SplitZ
 
 
 class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
