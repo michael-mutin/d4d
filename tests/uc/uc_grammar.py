@@ -129,7 +129,14 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         raise ValueError(f"unknown rewrite {rewrite!r}")
 
     def conflicts(self, a: Rewrite, b: Rewrite) -> bool:
-        raise NotImplementedError
+        def touched(rewrite: Rewrite) -> set[int]:
+            if isinstance(rewrite, AddCub):
+                return set()
+            if isinstance(rewrite, Merge):
+                return {rewrite.i, rewrite.j}
+            return {rewrite.i}
+
+        return bool(touched(a) & touched(b))
 
     def apply_all(self, base: CubSet, rewrites: Sequence[Rewrite]) -> CubSet:
         raise NotImplementedError
