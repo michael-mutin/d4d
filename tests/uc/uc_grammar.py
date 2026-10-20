@@ -236,7 +236,17 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         return bool(touched(a) & touched(b))
 
     def apply_all(self, base: CubSet, rewrites: Sequence[Rewrite]) -> CubSet:
-        raise NotImplementedError
+        def rightmost_index(rewrite: Rewrite) -> int:
+            if isinstance(rewrite, AddCub):
+                return -1
+            if isinstance(rewrite, Merge):
+                return max(rewrite.i, rewrite.j)
+            return rewrite.i
+
+        out = base
+        for rewrite in sorted(rewrites, key=rightmost_index, reverse=True):
+            out = self.apply(out, rewrite)
+        return out
 
     def loss(self, batch: ListCollection[CubSet], ctx: StepContext, state: None) -> tuple[torch.Tensor, ExtraMetrics]:
         return self.loss_non_differentiable(batch, ctx, state)
