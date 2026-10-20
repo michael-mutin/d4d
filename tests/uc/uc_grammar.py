@@ -15,13 +15,67 @@ from .uc_rewrite import AddCub, AddHoleXY, AddHoleXZ, AddHoleYZ, Merge, RemoveRe
 
 
 class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
-    """Placeholder grammar for parametric union-cuboid objects."""
+    """Grammar for parametric union-cuboid objects and image-view targets."""
 
     list_spec = ListSpec(
         params_of=lambda o: [o.params],
         with_params=lambda o, ts: replace(o, params=ts[0]),
         names=("params",),
     )
+
+    def __init__(
+        self,
+        rgb_images: Sequence[torch.Tensor] | None = None,
+        grayscale_images: Sequence[torch.Tensor] | None = None,
+        camera_poses: Sequence[Any] | None = None,
+    ) -> None:
+        """Store aligned RGB images, binary masks, and camera poses as targets."""
+        if rgb_images is None and grayscale_images is None and camera_poses is None:
+            self.rgb_images = ()
+            self.grayscale_images = ()
+            self.camera_poses = ()
+            return
+        if rgb_images is None or grayscale_images is None or camera_poses is None:
+            raise ValueError("RGB images, grayscale images, and camera poses must be provided together")
+        if len(rgb_images) == 0 or len(grayscale_images) == 0 or len(camera_poses) == 0:
+            raise ValueError("at least one RGB image, grayscale image, and camera pose is required")
+        if not len(rgb_images) == len(grayscale_images) == len(camera_poses):
+            raise ValueError("RGB images, grayscale images, and camera poses must have equal lengths")
+
+        rgb_resolution = self._rgb_resolution(rgb_images[0])
+        for image in rgb_images:
+            if self._rgb_resolution(image) != rgb_resolution:
+                raise ValueError("all RGB images must have the same resolution")
+
+        for image in grayscale_images:
+            if self._grayscale_resolution(image) != rgb_resolution:
+                raise ValueError("RGB and grayscale images must have the same resolution")
+            if not torch.all((image == 0) | (image == 1) | (image == 255)):
+                raise ValueError("grayscale images must contain only black/white values (0, 1, or 255)")
+
+        self.rgb_images = tuple(rgb_images)
+        self.grayscale_images = tuple(grayscale_images)
+        self.camera_poses = tuple(camera_poses)
+
+    @staticmethod
+    def _rgb_resolution(image: torch.Tensor) -> tuple[int, int]:
+        if image.ndim != 3:
+            raise ValueError("RGB images must have shape (H, W, 3) or (3, H, W)")
+        if image.shape[-1] == 3:
+            return int(image.shape[0]), int(image.shape[1])
+        if image.shape[0] == 3:
+            return int(image.shape[1]), int(image.shape[2])
+        raise ValueError("RGB images must have shape (H, W, 3) or (3, H, W)")
+
+    @staticmethod
+    def _grayscale_resolution(image: torch.Tensor) -> tuple[int, int]:
+        if image.ndim == 2:
+            return int(image.shape[0]), int(image.shape[1])
+        if image.ndim == 3 and image.shape[-1] == 1:
+            return int(image.shape[0]), int(image.shape[1])
+        if image.ndim == 3 and image.shape[0] == 1:
+            return int(image.shape[1]), int(image.shape[2])
+        raise ValueError("grayscale images must have shape (H, W), (H, W, 1), or (1, H, W)")
 
     def initial(self) -> CubSet:
         return CubSet(
