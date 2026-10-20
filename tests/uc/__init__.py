@@ -2,7 +2,7 @@
 
 from .uc_grammar import CubGrammar
 from .uc_object import CubSet
-from .uc_rendering import render_cubset
+from .uc_rendering import render_cubset, render_cubset_bw
 from .uc_rewrite import (
     AddCub,
     AddHoleXY,
@@ -30,4 +30,5 @@ __all__ = [
     "SplitY",
     "SplitZ",
     "render_cubset",
+    "render_cubset_bw",
 ]

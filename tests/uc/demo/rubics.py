@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import argparse
 
+import matplotlib.pyplot as plt
 import torch
 
-from .. import CubSet, render_cubset
+from .. import CubSet, render_cubset, render_cubset_bw
 
 
 def solved_cube() -> CubSet:
@@ -50,7 +51,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--save", type=str, help="also save the rendered cube as a PNG")
     args = parser.parse_args()
-    render_cubset(solved_cube(), save_path=args.save, show=True)
+    figure, axes = plt.subplots(1, 2, figsize=(10, 5), subplot_kw={"projection": "3d"})
+    cube = solved_cube()
+    render_cubset(cube, ax=axes[0], show=False)
+    render_cubset_bw(cube, ax=axes[1], show=False)
+    axes[0].set_title("Farbe")
+    axes[1].set_title("Schwarz-Weiß")
+    if args.save:
+        figure.savefig(args.save, dpi=160, bbox_inches="tight", facecolor="white")
+    plt.show()
 
 
 if __name__ == "__main__":
