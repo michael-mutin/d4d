@@ -43,11 +43,10 @@ def main() -> None:
         render_rgb=render_cubset_rgb_image,
         render_grayscale=render_cubset_grayscale_image,
     )
-    losses, metrics = grammar.loss(
-        grammar.collate([obj for _, obj in samples]),
-        ctx=StepContext(step=0, total_steps=1, phase="step"),
-        state=None,
-    )
+    batch = grammar.collate([obj for _, obj in samples])
+    ctx = StepContext(step=0, total_steps=1, phase="step")
+    losses, metrics = grammar.loss(batch, ctx=ctx, state=None)
+    simplicity = grammar.simplicity(batch, ctx)
 
     figure, axes = plt.subplots(2, len(samples), figsize=(10, 5))
     for index, (name, _) in enumerate(samples):
@@ -56,7 +55,8 @@ def main() -> None:
         axes[1, index].imshow(render_cubset_grayscale_image(samples[index][1]), cmap="gray", vmin=0, vmax=1)
         axes[1, index].set_xlabel(
             f"Loss: {losses[index].item():.4f}\n"
-            f"MSE: {metrics['loss_mse'][index]:.4f} | BCE: {metrics['loss_bce'][index]:.4f}"
+            f"MSE: {metrics['loss_mse'][index]:.4f} | BCE: {metrics['loss_bce'][index]:.4f}\n"
+            f"Simplicity: {simplicity[index]:.0f} cuboids"
         )
         for axis in axes[:, index]:
             axis.set_xticks([])

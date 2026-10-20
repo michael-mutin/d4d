@@ -325,7 +325,4 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         return image
 
     def simplicity(self, batch: ListCollection[CubSet], ctx: StepContext) -> list[float]:
-        raise NotImplementedError
-
-    def config(self) -> dict[str, Any]:
-        raise NotImplementedError
+        return [float(len(obj.params)) for obj in batch]
