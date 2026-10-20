@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Any
@@ -91,6 +92,44 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         )
 
     def propose(self, obj: CubSet, budget: int) -> list[Rewrite]:
+        return self.propose_smart(obj, budget)
+
+    def propose_random(self, obj: CubSet, budget: int) -> list[Rewrite]:
+        """Create a small pool of random rewrite candidates."""
+        values = obj.params.detach().tolist()
+        rewrites: list[Rewrite] = []
+
+        for i, row in enumerate(values):
+            x, y, z, sx, sy, sz = row[:6]
+            rewrites.extend(
+                (
+                    SplitX(i, random.uniform(0.1, 0.9)),
+                    SplitY(i, random.uniform(0.1, 0.9)),
+                    SplitZ(i, random.uniform(0.1, 0.9)),
+                    AddHoleXY(i, x, y, random.uniform(0.1, 1.0) * min(sx, sy)),
+                    AddHoleXZ(i, x, z, random.uniform(0.1, 1.0) * min(sx, sz)),
+                    AddHoleYZ(i, y, z, random.uniform(0.1, 1.0) * min(sy, sz)),
+                )
+            )
+
+        if values:
+            rewrites.append(
+                AddCub(
+                    random.uniform(-1.0, 1.0),
+                    random.uniform(-1.0, 1.0),
+                    random.uniform(-1.0, 1.0),
+                    random.uniform(0.1, 1.0),
+                )
+            )
+        if len(values) > 1:
+            rewrites.extend(RemoveRect(i) for i in range(len(values)))
+            rewrites.extend(Merge(i, j) for i in range(len(values)) for j in range(i + 1, len(values)))
+
+        if budget > 0 and len(rewrites) > budget:
+            return random.sample(rewrites, budget)
+        return rewrites
+
+    def propose_smart(self, obj: CubSet, budget: int) -> list[Rewrite]:
         raise NotImplementedError
 
     def apply(self, obj: CubSet, rewrite: Rewrite) -> CubSet:
