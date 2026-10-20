@@ -2,7 +2,7 @@
 
 from .uc_grammar import CubGrammar
 from .uc_object import CubSet
-from .uc_rendering import render_cubset, render_cubset_bw
+from .uc_rendering import render_cubset, render_cubset_bw, render_cubset_grayscale_image, render_cubset_rgb_image
 from .uc_rewrite import (
     AddCub,
     AddHoleXY,
@@ -31,4 +31,6 @@ __all__ = [
     "SplitZ",
     "render_cubset",
     "render_cubset_bw",
+    "render_cubset_grayscale_image",
+    "render_cubset_rgb_image",
 ]

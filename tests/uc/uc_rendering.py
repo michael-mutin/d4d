@@ -6,8 +6,47 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 
 from .uc_object import CubSet
+
+DEFAULT_IMAGE_BOUNDS = (-1.5, 1.5, -1.5, 1.5, -0.75, 3.25)
+
+
+def _figure_rgb(figure: Any) -> torch.Tensor:
+    """Read a rendered Matplotlib figure as an ``(H, W, 3)`` float tensor."""
+    figure.canvas.draw()
+    rgba = np.asarray(figure.canvas.buffer_rgba())[..., :3].copy()
+    return torch.from_numpy(rgba).float() / 255.0
+
+
+def render_cubset_rgb_image(
+    cubset: CubSet,
+    camera_pose: tuple[float | None, float | None] = (25.0, -60.0),
+) -> torch.Tensor:
+    """Render a cubset with :func:`render_cubset` and return an RGB image tensor."""
+    figure = render_cubset(cubset, elev=camera_pose[0], azim=camera_pose[1], bounds=DEFAULT_IMAGE_BOUNDS)
+    try:
+        return _figure_rgb(figure)
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(figure)
+
+
+def render_cubset_grayscale_image(
+    cubset: CubSet,
+    camera_pose: tuple[float | None, float | None] = (25.0, -60.0),
+) -> torch.Tensor:
+    """Render a cubset with :func:`render_cubset_bw` and return a grayscale mask."""
+    figure = render_cubset_bw(cubset, elev=camera_pose[0], azim=camera_pose[1], bounds=DEFAULT_IMAGE_BOUNDS)
+    try:
+        rgb = _figure_rgb(figure)
+        return (rgb.mean(dim=-1) < 0.5).to(dtype=torch.float32)
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(figure)
 
 
 def render_cubset(
@@ -18,6 +57,7 @@ def render_cubset(
     show: bool = False,
     elev: float | None = 25.0,
     azim: float | None = -60.0,
+    bounds: tuple[float, float, float, float, float, float] | None = None,
 ) -> Any:
     """Render all cuboids in ``cubset`` as a Matplotlib 3D figure."""
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -65,10 +105,15 @@ def render_cubset(
         ]
         ax.add_collection3d(Poly3DCollection(faces, facecolors=color, edgecolors=(0.12, 0.12, 0.12), linewidths=0.45))
 
-    if all_vertices:
-        bounds = np.concatenate(all_vertices)
-        minimum = bounds.min(axis=0)
-        maximum = bounds.max(axis=0)
+    if bounds is not None:
+        ax.set_xlim(bounds[0], bounds[1])
+        ax.set_ylim(bounds[2], bounds[3])
+        ax.set_zlim(bounds[4], bounds[5])
+        ax.set_box_aspect((1, 1, 1))
+    elif all_vertices:
+        vertex_bounds = np.concatenate(all_vertices)
+        minimum = vertex_bounds.min(axis=0)
+        maximum = vertex_bounds.max(axis=0)
         center = (minimum + maximum) / 2
         radius = max((maximum - minimum).max() / 2, 1e-6) * 1.08
         ax.set_xlim(center[0] - radius, center[0] + radius)
@@ -92,6 +137,7 @@ def render_cubset_bw(
     show: bool = False,
     elev: float | None = 25.0,
     azim: float | None = -60.0,
+    bounds: tuple[float, float, float, float, float, float] | None = None,
 ) -> Any:
     """Render the cubset as a black object on a white background."""
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -140,10 +186,15 @@ def render_cubset_bw(
         ]
         ax.add_collection3d(Poly3DCollection(faces, facecolors="black", edgecolors="black", linewidths=0.45))
 
-    if all_vertices:
-        bounds = np.concatenate(all_vertices)
-        minimum = bounds.min(axis=0)
-        maximum = bounds.max(axis=0)
+    if bounds is not None:
+        ax.set_xlim(bounds[0], bounds[1])
+        ax.set_ylim(bounds[2], bounds[3])
+        ax.set_zlim(bounds[4], bounds[5])
+        ax.set_box_aspect((1, 1, 1))
+    elif all_vertices:
+        vertex_bounds = np.concatenate(all_vertices)
+        minimum = vertex_bounds.min(axis=0)
+        maximum = vertex_bounds.max(axis=0)
         center = (minimum + maximum) / 2
         radius = max((maximum - minimum).max() / 2, 1e-6) * 1.08
         ax.set_xlim(center[0] - radius, center[0] + radius)
