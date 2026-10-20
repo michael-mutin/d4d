@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -28,34 +28,38 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         rgb_images: Sequence[torch.Tensor] | None = None,
         grayscale_images: Sequence[torch.Tensor] | None = None,
         camera_poses: Sequence[Any] | None = None,
+        render_rgb: Callable[[CubSet, Any], torch.Tensor] | None = None,
+        render_grayscale: Callable[[CubSet, Any], torch.Tensor] | None = None,
     ) -> None:
-        """Store aligned RGB images, binary masks, and camera poses as targets."""
+        """Store targets and the non-differentiable RGB and grayscale renderers."""
         if rgb_images is None and grayscale_images is None and camera_poses is None:
             self.rgb_images = ()
             self.grayscale_images = ()
             self.camera_poses = ()
-            return
-        if rgb_images is None or grayscale_images is None or camera_poses is None:
-            raise ValueError("RGB images, grayscale images, and camera poses must be provided together")
-        if len(rgb_images) == 0 or len(grayscale_images) == 0 or len(camera_poses) == 0:
-            raise ValueError("at least one RGB image, grayscale image, and camera pose is required")
-        if not len(rgb_images) == len(grayscale_images) == len(camera_poses):
-            raise ValueError("RGB images, grayscale images, and camera poses must have equal lengths")
+        else:
+            if rgb_images is None or grayscale_images is None or camera_poses is None:
+                raise ValueError("RGB images, grayscale images, and camera poses must be provided together")
+            if len(rgb_images) == 0 or len(grayscale_images) == 0 or len(camera_poses) == 0:
+                raise ValueError("at least one RGB image, grayscale image, and camera pose is required")
+            if not len(rgb_images) == len(grayscale_images) == len(camera_poses):
+                raise ValueError("RGB images, grayscale images, and camera poses must have equal lengths")
 
-        rgb_resolution = self._rgb_resolution(rgb_images[0])
-        for image in rgb_images:
-            if self._rgb_resolution(image) != rgb_resolution:
-                raise ValueError("all RGB images must have the same resolution")
+            rgb_resolution = self._rgb_resolution(rgb_images[0])
+            for image in rgb_images:
+                if self._rgb_resolution(image) != rgb_resolution:
+                    raise ValueError("all RGB images must have the same resolution")
 
-        for image in grayscale_images:
-            if self._grayscale_resolution(image) != rgb_resolution:
-                raise ValueError("RGB and grayscale images must have the same resolution")
-            if not torch.all((image == 0) | (image == 1) | (image == 255)):
-                raise ValueError("grayscale images must contain only black/white values (0, 1, or 255)")
+            for image in grayscale_images:
+                if self._grayscale_resolution(image) != rgb_resolution:
+                    raise ValueError("RGB and grayscale images must have the same resolution")
+                if not torch.all((image == 0) | (image == 1) | (image == 255)):
+                    raise ValueError("grayscale images must contain only black/white values (0, 1, or 255)")
 
-        self.rgb_images = tuple(rgb_images)
-        self.grayscale_images = tuple(grayscale_images)
-        self.camera_poses = tuple(camera_poses)
+            self.rgb_images = tuple(rgb_images)
+            self.grayscale_images = tuple(grayscale_images)
+            self.camera_poses = tuple(camera_poses)
+        self.render_rgb = render_rgb
+        self.render_grayscale = render_grayscale
 
     @staticmethod
     def _rgb_resolution(image: torch.Tensor) -> tuple[int, int]:
@@ -196,7 +200,80 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         raise NotImplementedError
 
     def loss(self, batch: ListCollection[CubSet], ctx: StepContext, state: None) -> tuple[torch.Tensor, ExtraMetrics]:
+        return self.loss_non_differentiable(batch, ctx, state)
+
+    def loss_non_differentiable(
+        self, batch: ListCollection[CubSet], ctx: StepContext, state: None
+    ) -> tuple[torch.Tensor, ExtraMetrics]:
+        """Evaluate the image loss using the currently available renderers."""
+        if self.rgb_images and self.render_rgb is None:
+            raise RuntimeError("render_rgb is required when RGB target images are configured")
+        if self.grayscale_images and self.render_grayscale is None:
+            raise RuntimeError("render_grayscale is required when grayscale target images are configured")
+
+        losses: list[torch.Tensor] = []
+        mse_values: list[float] = []
+        bce_values: list[float] = []
+        for obj in batch:
+            reference = obj.params
+            mse = reference.new_zeros(())
+            bce = reference.new_zeros(())
+
+            if self.rgb_images:
+                assert self.render_rgb is not None
+                mse_terms = []
+                for target, camera_pose in zip(self.rgb_images, self.camera_poses):
+                    prediction = self._rgb_tensor(self.render_rgb(obj, camera_pose), reference)
+                    expected = self._rgb_tensor(target, reference)
+                    mse_terms.append(torch.mean((prediction - expected) ** 2))
+                mse = torch.stack(mse_terms).mean()
+
+            if self.grayscale_images:
+                assert self.render_grayscale is not None
+                bce_terms = []
+                for target, camera_pose in zip(self.grayscale_images, self.camera_poses):
+                    prediction = self._grayscale_tensor(self.render_grayscale(obj, camera_pose), reference)
+                    expected = self._grayscale_tensor(target, reference)
+                    epsilon = torch.finfo(prediction.dtype).eps
+                    prediction = prediction.clamp(epsilon, 1.0 - epsilon)
+                    bce_terms.append(torch.nn.functional.binary_cross_entropy(prediction, expected))
+                bce = torch.stack(bce_terms).mean()
+
+            losses.append(mse + bce)
+            mse_values.append(float(mse.detach()))
+            bce_values.append(float(bce.detach()))
+
+        return torch.stack(losses), {"loss_mse": mse_values, "loss_bce": bce_values}
+
+    def loss_differentiable(
+        self, batch: ListCollection[CubSet], ctx: StepContext, state: None
+    ) -> tuple[torch.Tensor, ExtraMetrics]:
         raise NotImplementedError
+
+    @staticmethod
+    def _rgb_tensor(image: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:
+        if image.ndim != 3:
+            raise ValueError("RGB renderer output must have shape (H, W, 3) or (3, H, W)")
+        if image.shape[-1] == 3:
+            pass
+        elif image.shape[0] == 3:
+            image = image.permute(1, 2, 0)
+        else:
+            raise ValueError("RGB renderer output must have shape (H, W, 3) or (3, H, W)")
+        return image.to(device=reference.device, dtype=reference.dtype)
+
+    @staticmethod
+    def _grayscale_tensor(image: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:
+        if image.ndim == 3 and image.shape[-1] == 1:
+            image = image[..., 0]
+        elif image.ndim == 3 and image.shape[0] == 1:
+            image = image[0]
+        elif image.ndim != 2:
+            raise ValueError("grayscale renderer output must have shape (H, W), (H, W, 1), or (1, H, W)")
+        image = image.to(device=reference.device, dtype=reference.dtype)
+        if torch.any(image > 1):
+            image = image / 255.0
+        return image
 
     def simplicity(self, batch: ListCollection[CubSet], ctx: StepContext) -> list[float]:
         raise NotImplementedError
