@@ -12,6 +12,10 @@ import torch
 from d4d import ExtraMetrics, Grammar, ListCollection, ListSpec, StepContext
 
 from .uc_object import CubSet
+from .uc_differentiable_rendering import (
+    render_cubset_differentiable_grayscale_image,
+    render_cubset_differentiable_rgb_image,
+)
 from .uc_rewrite import AddCub, AddHoleXY, AddHoleXZ, AddHoleYZ, Merge, RemoveRect, Rewrite, SplitX, SplitY, SplitZ
 
 
@@ -32,7 +36,7 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         render_rgb: Callable[[CubSet, Any], torch.Tensor] | None = None,
         render_grayscale: Callable[[CubSet, Any], torch.Tensor] | None = None,
     ) -> None:
-        """Store targets and the non-differentiable RGB and grayscale renderers."""
+        """Store image targets and optional renderers for the non-differentiable loss."""
         if rgb_images is None and grayscale_images is None and camera_poses is None:
             self.rgb_images = ()
             self.grayscale_images = ()
@@ -249,7 +253,7 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         return out
 
     def loss(self, batch: ListCollection[CubSet], ctx: StepContext, state: None) -> tuple[torch.Tensor, ExtraMetrics]:
-        return self.loss_non_differentiable(batch, ctx, state)
+        return self.loss_differentiable(batch, ctx, state)
 
     def loss_non_differentiable(
         self, batch: ListCollection[CubSet], ctx: StepContext, state: None
@@ -297,7 +301,43 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
     def loss_differentiable(
         self, batch: ListCollection[CubSet], ctx: StepContext, state: None
     ) -> tuple[torch.Tensor, ExtraMetrics]:
-        raise NotImplementedError
+        losses: list[torch.Tensor] = []
+        mse_values: list[float] = []
+        bce_values: list[float] = []
+        for index in range(len(batch)):
+            obj = batch.get(index, detach=False)
+            reference = obj.params
+            mse = reference.new_zeros(())
+            bce = reference.new_zeros(())
+
+            if self.rgb_images:
+                mse_terms = []
+                for target, camera_pose in zip(self.rgb_images, self.camera_poses):
+                    prediction = render_cubset_differentiable_rgb_image(
+                        obj, camera_pose, self._rgb_resolution(target)
+                    )
+                    prediction = self._rgb_tensor(prediction, reference)
+                    expected = self._rgb_tensor(target, reference)
+                    mse_terms.append(torch.mean((prediction - expected) ** 2))
+                mse = torch.stack(mse_terms).mean()
+
+            if self.grayscale_images:
+                bce_terms = []
+                for target, camera_pose in zip(self.grayscale_images, self.camera_poses):
+                    prediction = render_cubset_differentiable_grayscale_image(
+                        obj, camera_pose, self._grayscale_resolution(target)
+                    )
+                    prediction = self._grayscale_tensor(prediction, reference)
+                    expected = self._grayscale_tensor(target, reference)
+                    epsilon = torch.finfo(prediction.dtype).eps
+                    bce_terms.append(torch.nn.functional.binary_cross_entropy(prediction.clamp(epsilon, 1.0 - epsilon), expected))
+                bce = torch.stack(bce_terms).mean()
+
+            losses.append(mse + bce)
+            mse_values.append(float(mse.detach()))
+            bce_values.append(float(bce.detach()))
+
+        return torch.stack(losses), {"loss_mse": mse_values, "loss_bce": bce_values}
 
     @staticmethod
     def _rgb_tensor(image: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:

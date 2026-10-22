@@ -3,6 +3,11 @@
 from .uc_grammar import CubGrammar
 from .uc_object import CubSet
 from .uc_rendering import render_cubset, render_cubset_bw, render_cubset_grayscale_image, render_cubset_rgb_image
+from .uc_differentiable_rendering import (
+    render_cubset_differentiable,
+    render_cubset_differentiable_grayscale_image,
+    render_cubset_differentiable_rgb_image,
+)
 from .uc_rewrite import (
     AddCub,
     AddHoleXY,
@@ -33,4 +38,7 @@ __all__ = [
     "render_cubset_bw",
     "render_cubset_grayscale_image",
     "render_cubset_rgb_image",
+    "render_cubset_differentiable",
+    "render_cubset_differentiable_grayscale_image",
+    "render_cubset_differentiable_rgb_image",
 ]

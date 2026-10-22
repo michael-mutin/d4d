@@ -12,7 +12,12 @@ import torch
 
 from d4d import StepContext
 
-from .. import CubGrammar, CubSet, render_cubset_grayscale_image, render_cubset_rgb_image
+from .. import (
+    CubGrammar,
+    CubSet,
+    render_cubset_differentiable_grayscale_image,
+    render_cubset_differentiable_rgb_image,
+)
 
 
 def tower(colors: list[tuple[float, float, float]]) -> CubSet:
@@ -37,11 +42,9 @@ def main() -> None:
     ]
 
     grammar = CubGrammar(
-        rgb_images=[render_cubset_rgb_image(ground_truth)],
-        grayscale_images=[render_cubset_grayscale_image(ground_truth)],
+        rgb_images=[render_cubset_differentiable_rgb_image(ground_truth)],
+        grayscale_images=[render_cubset_differentiable_grayscale_image(ground_truth)],
         camera_poses=[(25.0, -60.0)],
-        render_rgb=render_cubset_rgb_image,
-        render_grayscale=render_cubset_grayscale_image,
     )
     batch = grammar.collate([obj for _, obj in samples])
     ctx = StepContext(step=0, total_steps=1, phase="step")
@@ -50,9 +53,11 @@ def main() -> None:
 
     figure, axes = plt.subplots(2, len(samples), figsize=(10, 5))
     for index, (name, _) in enumerate(samples):
-        axes[0, index].imshow(render_cubset_rgb_image(samples[index][1]))
+        axes[0, index].imshow(render_cubset_differentiable_rgb_image(samples[index][1]))
         axes[0, index].set_title(name)
-        axes[1, index].imshow(render_cubset_grayscale_image(samples[index][1]), cmap="gray", vmin=0, vmax=1)
+        axes[1, index].imshow(
+            render_cubset_differentiable_grayscale_image(samples[index][1]), cmap="gray", vmin=0, vmax=1
+        )
         axes[1, index].set_xlabel(
             f"Loss: {losses[index].item():.4f}\n"
             f"MSE: {metrics['loss_mse'][index]:.4f} | BCE: {metrics['loss_bce'][index]:.4f}\n"
