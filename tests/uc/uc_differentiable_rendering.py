@@ -7,7 +7,7 @@ import torch
 from .uc_object import CubSet
 
 DEFAULT_IMAGE_SIZE = (128, 128)
-DEFAULT_CAMERA_TARGET = (0.0, 0.0, 1.25)
+DEFAULT_CAMERA_TARGET = (0.0, 1.25, 0.0)
 DEFAULT_CAMERA_DISTANCE = 7.0
 
 

@@ -1,4 +1,8 @@
-"""Matplotlib rendering for union-cuboid objects."""
+"""Matplotlib rendering for union-cuboid objects.
+
+The view uses Matplotlib's ``vertical_axis="y"`` so its elevation and azimuth
+match PyTorch3D's Y-up camera convention.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +14,8 @@ import torch
 
 from .uc_object import CubSet
 
-DEFAULT_IMAGE_BOUNDS = (-1.5, 1.5, -1.5, 1.5, -0.75, 3.25)
+DEFAULT_IMAGE_BOUNDS = (-1.5, 1.5, -0.75, 3.25, -1.5, 1.5)
+MATPLOTLIB_VERTICAL_AXIS = "y"
 
 
 def _figure_rgb(figure: Any) -> torch.Tensor:
@@ -71,7 +76,8 @@ def render_cubset(
     if ax is None:
         _, ax = plt.subplots(subplot_kw={"projection": "3d"})
     if elev is not None or azim is not None:
-        ax.view_init(elev=elev, azim=azim)
+        # PyTorch3D uses +Y as up and the same spherical-angle convention.
+        ax.view_init(elev=elev, azim=azim, vertical_axis=MATPLOTLIB_VERTICAL_AXIS)
 
     all_vertices: list[np.ndarray] = []
     for row in cubset.params.detach().cpu().numpy():
@@ -151,7 +157,7 @@ def render_cubset_bw(
     if ax is None:
         _, ax = plt.subplots(subplot_kw={"projection": "3d"})
     if elev is not None or azim is not None:
-        ax.view_init(elev=elev, azim=azim)
+        ax.view_init(elev=elev, azim=azim, vertical_axis=MATPLOTLIB_VERTICAL_AXIS)
     ax.set_facecolor("white")
     ax.figure.patch.set_facecolor("white")
 
