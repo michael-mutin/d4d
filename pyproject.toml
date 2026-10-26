@@ -7,14 +7,16 @@ requires-python = ">=3.11"
 license = "PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE"]
 dependencies = [
-    "torch>=2.4",
+    "torch==2.4.1",
+    "torchvision==0.19.1",
+    "torchaudio==2.4.1",
     "typing_extensions>=4.4",
     "numpy>=1.24",
     "tqdm>=4.65",
     "imageio>=2.31",
     "imageio-ffmpeg>=0.4",
     "matplotlib>=3.8",
-    "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git",
+    "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@stable",
 ]
 
 [project.optional-dependencies]
@@ -32,8 +34,17 @@ include = ["d4d*"]
 d4d = ["py.typed"]
 
 [tool.uv]
-extra-build-dependencies = { pytorch3d = ["torch"] }
-extra-build-variables = { pytorch3d = { CXXFLAGS = "-std=c++20" } }
+extra-build-dependencies = { pytorch3d = ["torch==2.4.1"] }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
