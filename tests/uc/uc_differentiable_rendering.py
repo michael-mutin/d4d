@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 
 from .uc_object import CubSet
@@ -9,6 +11,29 @@ from .uc_object import CubSet
 DEFAULT_IMAGE_SIZE = (128, 128)
 DEFAULT_CAMERA_TARGET = (0.0, 1.25, 0.0)
 DEFAULT_CAMERA_DISTANCE = 7.0
+
+
+class _UnlitShader(torch.nn.Module):
+    """Interpolate mesh colors without applying lighting."""
+
+    def __init__(self, cameras: Any, blend_params: Any) -> None:
+        super().__init__()
+        self.cameras = cameras
+        self.blend_params = blend_params
+
+    def forward(self, fragments: Any, meshes: Any, **kwargs: Any) -> torch.Tensor:
+        from pytorch3d.renderer import softmax_rgb_blend
+
+        texels = meshes.sample_textures(fragments)
+        blend_params = kwargs.get("blend_params", self.blend_params)
+        cameras = kwargs.get("cameras", self.cameras)
+        return softmax_rgb_blend(
+            texels,
+            fragments,
+            blend_params,
+            znear=getattr(cameras, "znear", 1.0),
+            zfar=getattr(cameras, "zfar", 100.0),
+        )
 
 
 def cubset_to_mesh(cubset: CubSet) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -107,16 +132,14 @@ def render_mesh(
     image_size: int | tuple[int, int] = DEFAULT_IMAGE_SIZE,
     grayscale: bool = False,
 ) -> torch.Tensor:
-    """Render a mesh with PyTorch3D's differentiable rasterizer and SoftPhong shader."""
+    """Render a mesh with PyTorch3D's differentiable rasterizer without lighting."""
     try:
         from pytorch3d.renderer import (
             BlendParams,
             FoVPerspectiveCameras,
             MeshRasterizer,
             MeshRenderer,
-            PointLights,
             RasterizationSettings,
-            SoftPhongShader,
             TexturesVertex,
             look_at_view_transform,
         )
@@ -165,12 +188,7 @@ def render_mesh(
     )
     renderer = MeshRenderer(
         rasterizer=rasterizer,
-        shader=SoftPhongShader(
-            device=vertices.device,
-            cameras=cameras,
-            lights=PointLights(device=vertices.device, location=((0.0, 0.0, 6.0),)),
-            blend_params=BlendParams(background_color=(1.0, 1.0, 1.0)),
-        ),
+        shader=_UnlitShader(cameras, BlendParams(background_color=(1.0, 1.0, 1.0))),
     )
     rendered = renderer(mesh)[0, ..., :3]
     if grayscale:
