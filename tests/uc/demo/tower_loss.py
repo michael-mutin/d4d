@@ -70,7 +70,7 @@ def main() -> None:
         axes[1, index].set_xlabel(
             f"Loss: {losses[index].item():.4f}\n"
             f"MSE: {metrics['loss_mse'][index]:.4f} | BCE: {metrics['loss_bce'][index]:.4f}\n"
-            f"Simplicity: {simplicity[index]:.0f} cuboids"
+            f"Simplicity: {simplicity[index]:.4f}"
         )
         for axis in axes[:, index]:
             axis.set_xticks([])
