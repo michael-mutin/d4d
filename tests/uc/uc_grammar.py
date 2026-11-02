@@ -21,9 +21,6 @@ from .uc_rendering import render_cubset_rgb_image
 from .uc_rewrite import AddCub, AddHoleXY, AddHoleXZ, AddHoleYZ, Merge, RemoveRect, Rewrite, SplitX, SplitY, SplitZ
 
 
-SIMPLICITY_SCALE = 0.01
-
-
 class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
     """Grammar for parametric union-cuboid objects and image-view targets."""
 
@@ -395,4 +392,4 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         return image
 
     def simplicity(self, batch: ListCollection[CubSet], ctx: StepContext) -> list[float]:
-        return [SIMPLICITY_SCALE * float(len(obj.params)) for obj in batch]
+        return [float(len(obj.params)) for obj in batch]
