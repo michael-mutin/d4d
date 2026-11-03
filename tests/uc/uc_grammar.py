@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 import torch
@@ -21,6 +21,16 @@ from .uc_rendering import render_cubset_rgb_image
 from .uc_rewrite import AddCub, AddHoleXY, AddHoleXZ, AddHoleYZ, Merge, RemoveRect, Rewrite, SplitX, SplitY, SplitZ
 
 
+class CubCollection(ListCollection[CubSet]):
+    """Cuboid batches with positive half-size parameters."""
+
+    def project_to_valid_(self) -> Self:
+        with torch.no_grad():
+            for params in self.parameters():
+                params[:, 3:6].clamp_(min=1e-4)
+        return self
+
+
 class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
     """Grammar for parametric union-cuboid objects and image-view targets."""
 
@@ -29,6 +39,9 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         with_params=lambda o, ts: replace(o, params=ts[0]),
         names=("params",),
     )
+
+    def collate(self, objects: Sequence[CubSet]) -> CubCollection:
+        return CubCollection.build(objects, self.list_spec)
 
     def __init__(
         self,
@@ -110,14 +123,17 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
 
         for i, row in enumerate(values):
             x, y, z, sx, sy, sz = row[:6]
+            xy_radius = random.uniform(0.1, 0.99) * max(0.0, min(sx, sy))
+            xz_radius = random.uniform(0.1, 0.99) * max(0.0, min(sx, sz))
+            yz_radius = random.uniform(0.1, 0.99) * max(0.0, min(sy, sz))
             rewrites.extend(
                 (
                     SplitX(i, random.uniform(0.1, 0.9)),
                     SplitY(i, random.uniform(0.1, 0.9)),
                     SplitZ(i, random.uniform(0.1, 0.9)),
-                    AddHoleXY(i, x, y, random.uniform(0.1, 1.0) * min(sx, sy)),
-                    AddHoleXZ(i, x, z, random.uniform(0.1, 1.0) * min(sx, sz)),
-                    AddHoleYZ(i, y, z, random.uniform(0.1, 1.0) * min(sy, sz)),
+                    AddHoleXY(i, x, y, xy_radius),
+                    AddHoleXZ(i, x, z, xz_radius),
+                    AddHoleYZ(i, y, z, yz_radius),
                 )
             )
 
@@ -217,7 +233,7 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
             add_piece((hole[axis_a][1], original[axis_a][1]), original[axis_b])
             add_piece(hole[axis_a], (original[axis_b][0], hole[axis_b][0]))
             add_piece(hole[axis_a], (hole[axis_b][1], original[axis_b][1]))
-            return replace_rows(index, pieces)
+            return replace_rows(index, pieces or [row.clone()])
 
         if isinstance(rewrite, SplitX):
             return split(rewrite.i, 0, rewrite.t)
