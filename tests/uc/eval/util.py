@@ -8,7 +8,8 @@ from typing import Any
 
 import numpy as np
 
-from d4d import Callback, RunEnd, StepEnd, VisualizeEvent
+from d4d import Callback, RewriteEvent, RunEnd, StepEnd, VisualizeEvent
+
 from ..uc_differentiable_rendering import write_cubset_obj
 
 
@@ -24,6 +25,7 @@ class UCStep(Callback):
         self.losses_simplicity: list[float] = []
         self.losses_ma: list[float] = []
         self.extra: dict[str, list[float]] = {}
+        self.rewrite_log = self.output_dir / "rewrite_log.txt"
 
     def on_step_end(self, ev: StepEnd) -> None:
         self.losses.append(ev.loss)
@@ -47,6 +49,12 @@ class UCStep(Callback):
         if image.dtype != np.uint8:
             image = (np.clip(image, 0.0, 1.0) * 255).round().astype(np.uint8)
         iio.imwrite(self.output_dir / f"step{ev.step:06d}.png", image)
+
+    def on_rewrite(self, ev: RewriteEvent) -> None:
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        applied = ", ".join(repr(rewrite) for rewrite in ev.accepted) or "(none)"
+        with self.rewrite_log.open("a", encoding="utf-8") as file:
+            file.write(f"step {ev.step}: {applied}\n")
 
     def on_run_end(self, ev: RunEnd) -> None:
         self.output_dir.mkdir(parents=True, exist_ok=True)
