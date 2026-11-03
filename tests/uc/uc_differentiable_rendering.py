@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 import torch
 
@@ -121,6 +122,26 @@ def cubset_to_mesh(cubset: CubSet) -> tuple[torch.Tensor, torch.Tensor, torch.Te
     faces = face_template.unsqueeze(0) + 8 * torch.arange(params.shape[0], device=device).view(-1, 1, 1)
     vertex_colors = colors.unsqueeze(1).expand(-1, 8, -1).reshape(-1, 3).clamp(0.0, 1.0)
     return vertices.reshape(-1, 3), faces.reshape(-1, 3), vertex_colors
+
+
+def write_cubset_obj(cubset: CubSet, path: str | Path) -> None:
+    """Write a cubset as a Wavefront OBJ mesh with per-face colors."""
+    vertices, faces, vertex_colors = cubset_to_mesh(cubset)
+    vertices = vertices.detach().cpu().tolist()
+    faces = faces.detach().cpu().tolist()
+    vertex_colors = vertex_colors.detach().cpu().tolist()
+
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8") as file:
+        file.write("# d4d cubset mesh\n")
+        for vertex, color in zip(vertices, vertex_colors):
+            file.write(
+                f"v {vertex[0]:.9g} {vertex[1]:.9g} {vertex[2]:.9g} "
+                f"{color[0]:.9g} {color[1]:.9g} {color[2]:.9g}\n"
+            )
+        for face in faces:
+            file.write(f"f {face[0] + 1} {face[1] + 1} {face[2] + 1}\n")
 
 
 def render_mesh(

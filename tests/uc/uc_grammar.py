@@ -164,20 +164,24 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         if not self.rgb_images or len(batch) == 0:
             return None
 
-        target = self._rgb_tensor(self.rgb_images[0], batch.get(0).params).detach().cpu()
-        current = render_cubset_rgb_image(batch.get(0), self.camera_poses[0]).detach().cpu()
-        if current.shape != target.shape:
-            raise ValueError(
-                f"visualization target and rendered shape must have the same resolution, "
-                f"got {tuple(target.shape)} and {tuple(current.shape)}"
-            )
-
         def to_uint8(image: torch.Tensor) -> np.ndarray:
             if torch.any(image > 1):
                 image = image / 255.0
             return (image.clamp(0.0, 1.0) * 255.0).round().to(dtype=torch.uint8).numpy()
 
-        return np.concatenate((to_uint8(target), to_uint8(current)), axis=1)
+        frames = []
+        for target_image, camera_pose in zip(self.rgb_images, self.camera_poses):
+            target = self._rgb_tensor(target_image, batch.get(0).params).detach().cpu()
+            current = render_cubset_rgb_image(batch.get(0), camera_pose).detach().cpu()
+            if current.shape != target.shape:
+                raise ValueError(
+                    f"visualization target and rendered shape must have the same resolution, "
+                    f"got {tuple(target.shape)} and {tuple(current.shape)}"
+                )
+            frames.append(np.concatenate((to_uint8(target), to_uint8(current)), axis=1))
+
+        rows = [np.concatenate(frames[index:index + 2], axis=1) for index in range(0, len(frames), 2)]
+        return np.concatenate(rows, axis=0)
 
     def apply(self, obj: CubSet, rewrite: Rewrite) -> CubSet:
         values = obj.params.detach().clone()

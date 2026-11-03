@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from d4d import Callback, RunEnd, StepEnd, VisualizeEvent
+from ..uc_differentiable_rendering import write_cubset_obj
 
 
 class UCStep(Callback):
@@ -32,7 +33,11 @@ class UCStep(Callback):
         for name, value in ev.extra.items():
             self.extra.setdefault(name, []).append(float(value))
         if ev.rewrite or ev.step == 0:
-            print(f"step {ev.step:4d}  loss {ev.loss_cont:.6f}  loss_ma {ev.loss_ma:.6f}")
+            obj = ev.get_object()
+            print(
+                f"step {ev.step:4d}  cuboids {len(obj.params):4d}"
+                f"  loss {ev.loss_cont:.6f}  loss_ma {ev.loss_ma:.6f}"
+            )
 
     def on_visualize(self, ev: VisualizeEvent) -> None:
         import imageio.v3 as iio
@@ -51,8 +56,17 @@ class UCStep(Callback):
         best_result = f"best loss: {ev.result.best_loss:.9f}\nbest step: {ev.result.best_step}\n"
         best_result += f"best object:\n{ev.result.best}\n"
         (self.output_dir / "best_result.txt").write_text(best_result, encoding="utf-8")
+        self._write_shape(ev.result.best, "best_shape")
+        self._write_shape(ev.result.final, "final_shape")
         print(f"best loss {ev.result.best_loss:.9f} (step {ev.result.best_step})")
         print(f"best_result:\n{ev.result.best}")
+
+    def _write_shape(self, obj: Any, stem: str) -> None:
+        import pickle
+
+        with (self.output_dir / f"{stem}.pkl").open("wb") as file:
+            pickle.dump(obj, file)
+        write_cubset_obj(obj, self.output_dir / f"{stem}.obj")
 
     def _write_plot(self) -> None:
         import matplotlib.pyplot as plt

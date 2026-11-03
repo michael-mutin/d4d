@@ -23,19 +23,24 @@ class PurpleCuboidGrammar(CubGrammar):
         return self.propose_random(obj, budget)
 
     def visualize(self, batch, ctx, state):
-        if not self.rgb_images or len(batch) == 0:
+        if not self.rgb_images or not self.camera_poses or len(batch) == 0:
             return None
-        target = self._rgb_tensor(self.rgb_images[0], batch.get(0).params).detach().cpu()
-        current = render_cubset_differentiable_rgb_image(
-            batch.get(0),
-            self.camera_poses[0],
-            self._rgb_resolution(target),
-        ).detach().cpu()
 
         def to_uint8(image: torch.Tensor) -> np.ndarray:
             return (image.clamp(0.0, 1.0) * 255).round().to(dtype=torch.uint8).numpy()
 
-        return np.concatenate((to_uint8(target), to_uint8(current)), axis=1)
+        frames = []
+        for target_image, camera_pose in zip(self.rgb_images, self.camera_poses):
+            target = self._rgb_tensor(target_image, batch.get(0).params).detach().cpu()
+            current = render_cubset_differentiable_rgb_image(
+                batch.get(0),
+                camera_pose,
+                self._rgb_resolution(target),
+            ).detach().cpu()
+            frames.append(np.concatenate((to_uint8(target), to_uint8(current)), axis=1))
+
+        rows = [np.concatenate(frames[index:index + 2], axis=1) for index in range(0, len(frames), 2)]
+        return np.concatenate(rows, axis=0)
 
 
 def main() -> None:
