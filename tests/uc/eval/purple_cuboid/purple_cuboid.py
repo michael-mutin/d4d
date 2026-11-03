@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import numpy as np
 import torch
+
 from d4d import OptimizeArgs, optimize
 
-from ...uc_grammar import CubGrammar
 from ... import render_cubset_differentiable_rgb_image
+from ...uc_grammar import CubGrammar
 from ..util import UCStep
 from .purple_cuboid_target import make_target
 
@@ -58,7 +59,7 @@ def main() -> None:
         visualize_every=50,
         seed=0,
     )
-    optimize(grammar, args, [UCStep("purple_cuboid")])
+    optimize(grammar, args, [UCStep("purple_cuboid", target=target.cuboid)])
 
 
 if __name__ == "__main__":

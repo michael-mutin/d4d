@@ -16,10 +16,16 @@ from ..uc_differentiable_rendering import write_cubset_obj
 class UCStep(Callback):
     """Print optimization progress and persist images and loss history."""
 
-    def __init__(self, experiment: str, output_root: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        experiment: str,
+        output_root: str | Path | None = None,
+        target: Any | None = None,
+    ) -> None:
         root = Path(output_root) if output_root is not None else Path(__file__).parents[1] / "eval_out"
         timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
         self.output_dir = root / experiment / timestamp
+        self.target = target
         self.losses: list[float] = []
         self.losses_cont: list[float] = []
         self.losses_simplicity: list[float] = []
@@ -64,6 +70,8 @@ class UCStep(Callback):
         best_result = f"best loss: {ev.result.best_loss:.9f}\nbest step: {ev.result.best_step}\n"
         best_result += f"best object:\n{ev.result.best}\n"
         (self.output_dir / "best_result.txt").write_text(best_result, encoding="utf-8")
+        if self.target is not None:
+            self._write_shape(self.target, "target")
         self._write_shape(ev.result.best, "best_shape")
         self._write_shape(ev.result.final, "final_shape")
         print(f"best loss {ev.result.best_loss:.9f} (step {ev.result.best_step})")
