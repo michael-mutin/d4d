@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import radians
 
 import torch
 
@@ -33,14 +32,14 @@ class PurpleCuboidTarget:
 
 
 def purple_cuboid() -> CubSet:
-    """Return a 3:2:1 purple cuboid rotated by 10, 20, and 40 degrees."""
+    """Return a normalized 3:2:1 purple cuboid rotated by 10, 20, and 40 degrees."""
     return CubSet(
         program="A",
         params=torch.tensor(
             [[
-                0.0, 1.25, 0.0,
-                1.5, 1.0, 0.5,
-                radians(10.0), radians(20.0), radians(40.0),
+                0.0, 0.0, 0.0,
+                0.75, 0.5, 0.25,
+                10.0 / 180.0, 20.0 / 180.0, 40.0 / 180.0,
                 1.0, 0.0, 1.0,
             ]],
             dtype=torch.float32,

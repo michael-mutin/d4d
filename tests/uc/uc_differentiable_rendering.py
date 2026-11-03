@@ -6,7 +6,7 @@ from typing import Any
 
 import torch
 
-from .uc_object import CubSet
+from .uc_object import CubSet, denormalize_cuboid_params
 
 DEFAULT_IMAGE_SIZE = (128, 128)
 DEFAULT_CAMERA_TARGET = (0.0, 1.25, 0.0)
@@ -38,7 +38,7 @@ class _UnlitShader(torch.nn.Module):
 
 def cubset_to_mesh(cubset: CubSet) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Create differentiable cuboid vertices, faces, and vertex colors."""
-    params = cubset.params
+    params = denormalize_cuboid_params(cubset.params)
     if params.ndim != 2 or params.shape[1] != 12:
         raise ValueError("CubSet.params must have shape (number_of_cuboids, 12)")
     if len(cubset.program) != params.shape[0]:

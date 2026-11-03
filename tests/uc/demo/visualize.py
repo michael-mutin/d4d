@@ -20,7 +20,7 @@ def tower() -> CubSet:
     """Build a small colored tower to use as the visualization target."""
     colors = [(0.9, 0.05, 0.05), (0.05, 0.2, 0.9), (0.95, 0.8, 0.05)]
     rows = [
-        [0.0, height * 1.05, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, *color]
+        [0.0, height * 0.525, 0.0, 0.25, 0.25, 0.25, 0.0, 0.0, 0.0, *color]
         for height, color in enumerate(colors)
     ]
     return CubSet("A" * len(rows), torch.tensor(rows, dtype=torch.float32))

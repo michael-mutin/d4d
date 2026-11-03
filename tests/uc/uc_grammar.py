@@ -12,11 +12,11 @@ import torch
 
 from d4d import ExtraMetrics, Grammar, ListCollection, ListSpec, StepContext
 
-from .uc_object import CubSet
 from .uc_differentiable_rendering import (
     render_cubset_differentiable_grayscale_image,
     render_cubset_differentiable_rgb_image,
 )
+from .uc_object import CubSet
 from .uc_rendering import render_cubset_rgb_image
 from .uc_rewrite import AddCub, AddHoleXY, AddHoleXZ, AddHoleYZ, Merge, RemoveRect, Rewrite, SplitX, SplitY, SplitZ
 
@@ -108,7 +108,7 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         return CubSet(
             program="A",
             params=torch.tensor(
-                [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5]],
+                [[0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5]],
                 dtype=torch.float32,
             ),
         )
