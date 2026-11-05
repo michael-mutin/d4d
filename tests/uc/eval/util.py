@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from d4d import Callback, RewriteEvent, RunEnd, StepEnd, VisualizeEvent
+from d4d import Callback, RewriteEvent, RunEnd, RunStart, StepEnd, VisualizeEvent
+from d4d.serialize import to_jsonable
 
 from ..uc_differentiable_rendering import write_cubset_obj
 
@@ -32,6 +34,13 @@ class UCStep(Callback):
         self.losses_ma: list[float] = []
         self.extra: dict[str, list[float]] = {}
         self.rewrite_log = self.output_dir / "rewrite_log.txt"
+
+    def on_run_start(self, ev: RunStart) -> None:
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        (self.output_dir / "optimize_args.json").write_text(
+            json.dumps(to_jsonable(ev.args), indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     def on_step_end(self, ev: StepEnd) -> None:
         self.losses.append(ev.loss)
