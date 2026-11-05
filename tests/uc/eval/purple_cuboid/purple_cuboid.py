@@ -54,7 +54,7 @@ def main() -> None:
     args = OptimizeArgs(
         n_steps=600,
         lr=0.1,
-        propose_every=50,
+        propose_every=1000,
         w_simplicity=1e-3,
         visualize_every=50,
         seed=0,
