@@ -11,7 +11,10 @@ import torch
 
 from d4d import OptimizeArgs, optimize
 
-from ... import render_cubset_differentiable_rgb_image
+from ... import (
+    render_cubset_grayscale_image,
+    render_cubset_differentiable_rgb_image,
+)
 from ...uc_grammar import CubGrammar
 from ..util import UCStep
 from .purple_cuboid_target import make_target
@@ -30,7 +33,8 @@ class PurpleCuboidGrammar(CubGrammar):
         def to_uint8(image: torch.Tensor) -> np.ndarray:
             return (image.clamp(0.0, 1.0) * 255).round().to(dtype=torch.uint8).numpy()
 
-        frames = []
+        rgb_frames = []
+        grayscale_frames = []
         for target_image, camera_pose in zip(self.rgb_images, self.camera_poses):
             target = self._rgb_tensor(target_image, batch.get(0).params).detach().cpu()
             current = render_cubset_differentiable_rgb_image(
@@ -38,10 +42,35 @@ class PurpleCuboidGrammar(CubGrammar):
                 camera_pose,
                 self._rgb_resolution(target),
             ).detach().cpu()
-            frames.append(np.concatenate((to_uint8(target), to_uint8(current)), axis=1))
+            rgb_frames.append(np.concatenate((to_uint8(target), to_uint8(current)), axis=1))
 
-        rows = [np.concatenate(frames[index:index + 2], axis=1) for index in range(0, len(frames), 2)]
-        return np.concatenate(rows, axis=0)
+        for target_image, camera_pose in zip(self.grayscale_images, self.camera_poses):
+            target = self._grayscale_tensor(target_image, batch.get(0).params).detach().cpu()
+            current = render_cubset_grayscale_image(
+                batch.get(0),
+                camera_pose,
+            )
+            current = torch.nn.functional.interpolate(
+                current.unsqueeze(0).unsqueeze(0),
+                size=self._grayscale_resolution(target),
+                mode="nearest",
+            )[0, 0]
+            target_rgb = np.repeat(to_uint8(target)[..., None], 3, axis=-1)
+            current_rgb = np.repeat(to_uint8(current)[..., None], 3, axis=-1)
+            grayscale_frames.append(np.concatenate((target_rgb, current_rgb), axis=1))
+
+        rgb_rows = [
+            np.concatenate(rgb_frames[index:index + 2], axis=1)
+            for index in range(0, len(rgb_frames), 2)
+        ]
+        grayscale_rows = [
+            np.concatenate(grayscale_frames[index:index + 2], axis=1)
+            for index in range(0, len(grayscale_frames), 2)
+        ]
+        return np.concatenate((
+            np.concatenate(rgb_rows, axis=0),
+            np.concatenate(grayscale_rows, axis=0),
+        ), axis=0)
 
 
 def main() -> None:
