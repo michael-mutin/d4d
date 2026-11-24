@@ -37,7 +37,6 @@ class UCStep(Callback):
         self.target = target
         self.losses: list[float] = []
         self.losses_cont: list[float] = []
-        self.losses_simplicity: list[float] = []
         self.losses_ma: list[float] = []
         self.extra: dict[str, list[float]] = {}
         self.rewrite_log = self.output_dir / "rewrite_log.txt"
@@ -52,7 +51,6 @@ class UCStep(Callback):
     def on_step_end(self, ev: StepEnd) -> None:
         self.losses.append(ev.loss)
         self.losses_cont.append(ev.loss_cont)
-        self.losses_simplicity.append(ev.loss_simplicity)
         self.losses_ma.append(ev.loss_ma)
         for name, value in ev.extra.items():
             self.extra.setdefault(name, []).append(float(value))
@@ -111,8 +109,6 @@ class UCStep(Callback):
         axis.plot(steps, self.losses, label="loss")
         axis.plot(steps, self.losses_cont, label="continuous loss")
         axis.plot(steps, self.losses_ma, label="moving average")
-        if any(self.losses_simplicity):
-            axis.plot(steps, self.losses_simplicity, label="simplicity")
         for name, values in self.extra.items():
             if len(values) == len(steps):
                 axis.plot(steps, values, label=name, linestyle="--")
