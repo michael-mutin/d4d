@@ -7,6 +7,7 @@ to write the comparison figure instead of opening it interactively.
 from __future__ import annotations
 
 import argparse
+
 import matplotlib.pyplot as plt
 import torch
 
@@ -15,10 +16,10 @@ from d4d import StepContext
 from .. import (
     CubGrammar,
     CubSet,
-    render_cubset_grayscale_image,
-    render_cubset_rgb_image,
     render_cubset_differentiable_grayscale_image,
     render_cubset_differentiable_rgb_image,
+    render_cubset_grayscale_image,
+    render_cubset_rgb_image,
 )
 
 
@@ -26,7 +27,7 @@ def tower(colors: list[tuple[float, float, float]]) -> CubSet:
     """Build a vertical tower from bottom to top."""
     rows: list[list[float]] = []
     for height, color in enumerate(colors):
-        rows.append([0.0, height * 1.05, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, *color])
+        rows.append([0.0, height * 0.525, 0.0, 0.25, 0.25, 0.25, 0.0, 0.0, 0.0, *color])
     return CubSet("A" * len(rows), torch.tensor(rows, dtype=torch.float32))
 
 

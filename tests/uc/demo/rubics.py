@@ -17,7 +17,7 @@ from .. import CubSet, render_cubset, render_cubset_bw
 def solved_cube() -> CubSet:
     """Create a solved 3x3x3 cube from cuboids and thin colored stickers."""
     rows: list[list[float]] = []
-    coordinates = (-1.0, 0.0, 1.0)
+    coordinates = (-0.5, 0.0, 0.5)
     sticker_colors = {
         "x-": (1.0, 0.45, 0.05),
         "x+": (0.85, 0.05, 0.05),
@@ -30,19 +30,19 @@ def solved_cube() -> CubSet:
     for x in coordinates:
         for y in coordinates:
             for z in coordinates:
-                rows.append([x, y, z, 0.49, 0.49, 0.49, 0, 0, 0, 0.035, 0.035, 0.035])
+                rows.append([x, y, z, 0.245, 0.245, 0.245, 0, 0, 0, 0.035, 0.035, 0.035])
                 if x == coordinates[0]:
-                    rows.append([x - 0.495, y, z, 0.04, 0.46, 0.46, 0, 0, 0, *sticker_colors["x-"]])
+                    rows.append([x - 0.2475, y, z, 0.02, 0.23, 0.23, 0, 0, 0, *sticker_colors["x-"]])
                 if x == coordinates[-1]:
-                    rows.append([x + 0.495, y, z, 0.04, 0.46, 0.46, 0, 0, 0, *sticker_colors["x+"]])
+                    rows.append([x + 0.2475, y, z, 0.02, 0.23, 0.23, 0, 0, 0, *sticker_colors["x+"]])
                 if y == coordinates[0]:
-                    rows.append([x, y - 0.495, z, 0.46, 0.04, 0.46, 0, 0, 0, *sticker_colors["y-"]])
+                    rows.append([x, y - 0.2475, z, 0.23, 0.02, 0.23, 0, 0, 0, *sticker_colors["y-"]])
                 if y == coordinates[-1]:
-                    rows.append([x, y + 0.495, z, 0.46, 0.04, 0.46, 0, 0, 0, *sticker_colors["y+"]])
+                    rows.append([x, y + 0.2475, z, 0.23, 0.02, 0.23, 0, 0, 0, *sticker_colors["y+"]])
                 if z == coordinates[0]:
-                    rows.append([x, y, z - 0.495, 0.46, 0.46, 0.04, 0, 0, 0, *sticker_colors["z-"]])
+                    rows.append([x, y, z - 0.2475, 0.23, 0.23, 0.02, 0, 0, 0, *sticker_colors["z-"]])
                 if z == coordinates[-1]:
-                    rows.append([x, y, z + 0.495, 0.46, 0.46, 0.04, 0, 0, 0, *sticker_colors["z+"]])
+                    rows.append([x, y, z + 0.2475, 0.23, 0.23, 0.02, 0, 0, 0, *sticker_colors["z+"]])
 
     return CubSet("A" * len(rows), torch.tensor(rows, dtype=torch.float32))
 

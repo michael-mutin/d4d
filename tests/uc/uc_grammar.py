@@ -5,20 +5,30 @@ from __future__ import annotations
 import random
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 import torch
 
 from d4d import ExtraMetrics, Grammar, ListCollection, ListSpec, StepContext
 
-from .uc_object import CubSet
 from .uc_differentiable_rendering import (
     render_cubset_differentiable_grayscale_image,
     render_cubset_differentiable_rgb_image,
 )
-from .uc_rendering import render_cubset_rgb_image
+from .uc_object import CubSet
+from .uc_rendering import render_cubset_grayscale_image, render_cubset_rgb_image
 from .uc_rewrite import AddCub, AddHoleXY, AddHoleXZ, AddHoleYZ, Merge, RemoveRect, Rewrite, SplitX, SplitY, SplitZ
+
+
+class CubCollection(ListCollection[CubSet]):
+    """Cuboid batches with positive half-size parameters."""
+
+    def project_to_valid_(self) -> Self:
+        with torch.no_grad():
+            for params in self.parameters():
+                params[:, 3:6].clamp_(min=1e-4)
+        return self
 
 
 class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
@@ -30,6 +40,9 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         names=("params",),
     )
 
+    def collate(self, objects: Sequence[CubSet]) -> CubCollection:
+        return CubCollection.build(objects, self.list_spec)
+
     def __init__(
         self,
         rgb_images: Sequence[torch.Tensor] | None = None,
@@ -37,6 +50,7 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         camera_poses: Sequence[Any] | None = None,
         render_rgb: Callable[[CubSet, Any], torch.Tensor] | None = None,
         render_grayscale: Callable[[CubSet, Any], torch.Tensor] | None = None,
+        blur_radius: float = 1e-2,
     ) -> None:
         """Store image targets and optional renderers for the non-differentiable loss."""
         self.rgb_images: tuple[torch.Tensor, ...]
@@ -70,6 +84,9 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
             self.camera_poses = tuple(camera_poses)
         self.render_rgb = render_rgb
         self.render_grayscale = render_grayscale
+        if blur_radius < 0:
+            raise ValueError("blur_radius must be non-negative")
+        self.blur_radius = blur_radius
 
     @staticmethod
     def _rgb_resolution(image: torch.Tensor) -> tuple[int, int]:
@@ -95,13 +112,13 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         return CubSet(
             program="A",
             params=torch.tensor(
-                [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5]],
+                [[0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5]],
                 dtype=torch.float32,
             ),
         )
 
     def propose(self, obj: CubSet, budget: int) -> list[Rewrite]:
-        return self.propose_smart(obj, budget)
+        return self.propose_random(obj, budget)
 
     def propose_random(self, obj: CubSet, budget: int) -> list[Rewrite]:
         """Create a small pool of random rewrite candidates."""
@@ -110,14 +127,17 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
 
         for i, row in enumerate(values):
             x, y, z, sx, sy, sz = row[:6]
+            xy_radius = random.uniform(0.1, 0.99) * max(0.0, min(sx, sy))
+            xz_radius = random.uniform(0.1, 0.99) * max(0.0, min(sx, sz))
+            yz_radius = random.uniform(0.1, 0.99) * max(0.0, min(sy, sz))
             rewrites.extend(
                 (
                     SplitX(i, random.uniform(0.1, 0.9)),
                     SplitY(i, random.uniform(0.1, 0.9)),
                     SplitZ(i, random.uniform(0.1, 0.9)),
-                    AddHoleXY(i, x, y, random.uniform(0.1, 1.0) * min(sx, sy)),
-                    AddHoleXZ(i, x, z, random.uniform(0.1, 1.0) * min(sx, sz)),
-                    AddHoleYZ(i, y, z, random.uniform(0.1, 1.0) * min(sy, sz)),
+                    AddHoleXY(i, x, y, xy_radius),
+                    AddHoleXZ(i, x, z, xz_radius),
+                    AddHoleYZ(i, y, z, yz_radius),
                 )
             )
 
@@ -144,24 +164,57 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
     def visualize(
         self, batch: ListCollection[CubSet], ctx: StepContext, state: None
     ) -> np.ndarray | None:
-        """Return the RGB target and current shape next to each other."""
+        """Return target and current RGB/grayscale views next to each other."""
         if not self.rgb_images or len(batch) == 0:
             return None
 
-        target = self._rgb_tensor(self.rgb_images[0], batch.get(0).params).detach().cpu()
-        current = render_cubset_rgb_image(batch.get(0), self.camera_poses[0]).detach().cpu()
-        if current.shape != target.shape:
-            raise ValueError(
-                f"visualization target and rendered shape must have the same resolution, "
-                f"got {tuple(target.shape)} and {tuple(current.shape)}"
-            )
-
-        def to_uint8(image: torch.Tensor) -> np.ndarray:
-            if torch.any(image > 1):
-                image = image / 255.0
+        def normalized_to_uint8(image: torch.Tensor) -> np.ndarray:
             return (image.clamp(0.0, 1.0) * 255.0).round().to(dtype=torch.uint8).numpy()
 
-        return np.concatenate((to_uint8(target), to_uint8(current)), axis=1)
+        rgb_frames = []
+        for target_image, camera_pose in zip(self.rgb_images, self.camera_poses):
+            # Targets are already rendered and passed into the grammar.
+            target = self._rgb_tensor(target_image, batch.get(0).params).detach().cpu()
+            target_pixels = normalized_to_uint8(target)
+
+            # Only the current object is rendered here, using the fast, sharp renderer.
+            current = render_cubset_rgb_image(batch.get(0), camera_pose).detach().cpu()
+            current = torch.nn.functional.interpolate(
+                current.permute(2, 0, 1).unsqueeze(0),
+                size=self._rgb_resolution(target),
+                mode="nearest",
+            )[0].permute(1, 2, 0)
+            rgb_frames.append(np.concatenate((target_pixels, normalized_to_uint8(current)), axis=1))
+
+        rgb_rows = [
+            np.concatenate(rgb_frames[index:index + 2], axis=1)
+            for index in range(0, len(rgb_frames), 2)
+        ]
+        if not self.grayscale_images:
+            return np.concatenate(rgb_rows, axis=0)
+
+        grayscale_frames = []
+        for target_image, camera_pose in zip(self.grayscale_images, self.camera_poses):
+            target = self._grayscale_tensor(target_image, batch.get(0).params).detach().cpu()
+            target_pixels = normalized_to_uint8(target)
+            current = render_cubset_grayscale_image(batch.get(0), camera_pose)
+            current = torch.nn.functional.interpolate(
+                current.unsqueeze(0).unsqueeze(0),
+                size=self._grayscale_resolution(target),
+                mode="nearest",
+            )[0, 0]
+            target_rgb = np.repeat(target_pixels[..., None], 3, axis=-1)
+            current_rgb = np.repeat(normalized_to_uint8(current)[..., None], 3, axis=-1)
+            grayscale_frames.append(np.concatenate((target_rgb, current_rgb), axis=1))
+
+        grayscale_rows = [
+            np.concatenate(grayscale_frames[index:index + 2], axis=1)
+            for index in range(0, len(grayscale_frames), 2)
+        ]
+        return np.concatenate((
+            np.concatenate(rgb_rows, axis=0),
+            np.concatenate(grayscale_rows, axis=0),
+        ), axis=0)
 
     def apply(self, obj: CubSet, rewrite: Rewrite) -> CubSet:
         values = obj.params.detach().clone()
@@ -217,7 +270,7 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
             add_piece((hole[axis_a][1], original[axis_a][1]), original[axis_b])
             add_piece(hole[axis_a], (original[axis_b][0], hole[axis_b][0]))
             add_piece(hole[axis_a], (hole[axis_b][1], original[axis_b][1]))
-            return replace_rows(index, pieces)
+            return replace_rows(index, pieces or [row.clone()])
 
         if isinstance(rewrite, SplitX):
             return split(rewrite.i, 0, rewrite.t)
@@ -257,6 +310,9 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
         raise ValueError(f"unknown rewrite {rewrite!r}")
 
     def conflicts(self, a: Rewrite, b: Rewrite) -> bool:
+        if isinstance(a, RemoveRect) and isinstance(b, RemoveRect):
+            return True
+
         def touched(rewrite: Rewrite) -> set[int]:
             if isinstance(rewrite, AddCub):
                 return set()
@@ -328,9 +384,19 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
     def loss_differentiable(
         self, batch: ListCollection[CubSet], ctx: StepContext, state: None
     ) -> tuple[torch.Tensor, ExtraMetrics]:
+        mse, bce = self.loss_differentiable_components(batch)
+        losses = mse + bce
+        return losses, {
+            "loss_mse": mse.detach().tolist(),
+            "loss_bce": bce.detach().tolist(),
+        }
+
+    def loss_differentiable_components(
+        self, batch: ListCollection[CubSet]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return per-object RGB-MSE and mask-BCE losses with gradients attached."""
         losses: list[torch.Tensor] = []
-        mse_values: list[float] = []
-        bce_values: list[float] = []
+        bce_losses: list[torch.Tensor] = []
         for index in range(len(batch)):
             obj = batch.get(index, detach=False)
             reference = obj.params
@@ -341,7 +407,8 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
                 mse_terms = []
                 for target, camera_pose in zip(self.rgb_images, self.camera_poses):
                     prediction = render_cubset_differentiable_rgb_image(
-                        obj, camera_pose, self._rgb_resolution(target)
+                        obj, camera_pose, self._rgb_resolution(target),
+                        blur_radius=self.blur_radius,
                     )
                     prediction = self._rgb_tensor(prediction, reference)
                     expected = self._rgb_tensor(target, reference)
@@ -352,7 +419,8 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
                 bce_terms = []
                 for target, camera_pose in zip(self.grayscale_images, self.camera_poses):
                     prediction = render_cubset_differentiable_grayscale_image(
-                        obj, camera_pose, self._grayscale_resolution(target)
+                        obj, camera_pose, self._grayscale_resolution(target),
+                        blur_radius=self.blur_radius,
                     )
                     prediction = self._grayscale_tensor(prediction, reference)
                     expected = self._grayscale_tensor(target, reference)
@@ -360,11 +428,10 @@ class CubGrammar(Grammar[CubSet, ListCollection[CubSet], Rewrite, None]):
                     bce_terms.append(torch.nn.functional.binary_cross_entropy(prediction.clamp(epsilon, 1.0 - epsilon), expected))
                 bce = torch.stack(bce_terms).mean()
 
-            losses.append(mse + bce)
-            mse_values.append(float(mse.detach()))
-            bce_values.append(float(bce.detach()))
+            losses.append(mse)
+            bce_losses.append(bce)
 
-        return torch.stack(losses), {"loss_mse": mse_values, "loss_bce": bce_values}
+        return torch.stack(losses), torch.stack(bce_losses)
 
     @staticmethod
     def _rgb_tensor(image: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:

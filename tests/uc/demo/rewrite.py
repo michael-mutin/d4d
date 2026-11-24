@@ -36,10 +36,10 @@ def main() -> None:
         ("SplitX(i=0, t=0.5)", grammar.apply(initial, SplitX(i=0, t=0.5))),
         ("SplitY(i=0, t=0.5)", grammar.apply(initial, SplitY(i=0, t=0.5))),
         ("SplitZ(i=0, t=0.5)", grammar.apply(initial, SplitZ(i=0, t=0.5))),
-        ("AddCub(x=1.2, y=0, z=0, s=0.3)", grammar.apply(initial, AddCub(x=1.2, y=0.0, z=0.0, s=0.3))),
-        ("AddHoleXY(i=0, x=0, y=0, s=0.2)", grammar.apply(initial, AddHoleXY(i=0, x=0.0, y=0.0, s=0.2))),
-        ("AddHoleXZ(i=0, x=0, z=0, s=0.2)", grammar.apply(initial, AddHoleXZ(i=0, x=0.0, z=0.0, s=0.2))),
-        ("AddHoleYZ(i=0, y=0, z=0, s=0.2)", grammar.apply(initial, AddHoleYZ(i=0, y=0.0, z=0.0, s=0.2))),
+        ("AddCub(x=0.6, y=0, z=0, s=0.15)", grammar.apply(initial, AddCub(x=0.6, y=0.0, z=0.0, s=0.15))),
+        ("AddHoleXY(i=0, x=0, y=0, s=0.1)", grammar.apply(initial, AddHoleXY(i=0, x=0.0, y=0.0, s=0.1))),
+        ("AddHoleXZ(i=0, x=0, z=0, s=0.1)", grammar.apply(initial, AddHoleXZ(i=0, x=0.0, z=0.0, s=0.1))),
+        ("AddHoleYZ(i=0, y=0, z=0, s=0.1)", grammar.apply(initial, AddHoleYZ(i=0, y=0.0, z=0.0, s=0.1))),
         ("RemoveRect(i=0)", grammar.apply(initial, RemoveRect(i=0))),
     ]
 

@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from .uc_object import CubSet
+from .uc_object import CubSet, denormalize_cuboid_params
 
 DEFAULT_IMAGE_BOUNDS = (-1.5, 1.5, -0.75, 3.25, -1.5, 1.5)
 MATPLOTLIB_VERTICAL_AXIS = "y"
@@ -65,8 +65,8 @@ def render_cubset(
     bounds: tuple[float, float, float, float, float, float] | None = None,
 ) -> Any:
     """Render all cuboids in ``cubset`` as a Matplotlib 3D figure."""
-    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
     import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
     if cubset.params.ndim != 2 or cubset.params.shape[1] != 12:
         raise ValueError("CubSet.params must have shape (number_of_cuboids, 12)")
@@ -80,7 +80,7 @@ def render_cubset(
         ax.view_init(elev=elev, azim=azim, vertical_axis=MATPLOTLIB_VERTICAL_AXIS)
 
     all_vertices: list[np.ndarray] = []
-    for row in cubset.params.detach().cpu().numpy():
+    for row in denormalize_cuboid_params(cubset.params).detach().cpu().numpy():
         center = row[0:3]
         half_size = row[3:6]
         alpha, beta, gamma = row[6:9]
@@ -146,8 +146,8 @@ def render_cubset_bw(
     bounds: tuple[float, float, float, float, float, float] | None = None,
 ) -> Any:
     """Render the cubset as a black object on a white background."""
-    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
     import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
     if cubset.params.ndim != 2 or cubset.params.shape[1] != 12:
         raise ValueError("CubSet.params must have shape (number_of_cuboids, 12)")
@@ -162,7 +162,7 @@ def render_cubset_bw(
     ax.figure.patch.set_facecolor("white")
 
     all_vertices: list[np.ndarray] = []
-    for row in cubset.params.detach().cpu().numpy():
+    for row in denormalize_cuboid_params(cubset.params).detach().cpu().numpy():
         center = row[0:3]
         half_size = row[3:6]
         alpha, beta, gamma = row[6:9]

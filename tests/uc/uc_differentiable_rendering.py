@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import torch
 
-from .uc_object import CubSet
+from .uc_object import CubSet, denormalize_cuboid_params
 
 DEFAULT_IMAGE_SIZE = (128, 128)
 DEFAULT_CAMERA_TARGET = (0.0, 1.25, 0.0)
@@ -38,7 +39,7 @@ class _UnlitShader(torch.nn.Module):
 
 def cubset_to_mesh(cubset: CubSet) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Create differentiable cuboid vertices, faces, and vertex colors."""
-    params = cubset.params
+    params = denormalize_cuboid_params(cubset.params)
     if params.ndim != 2 or params.shape[1] != 12:
         raise ValueError("CubSet.params must have shape (number_of_cuboids, 12)")
     if len(cubset.program) != params.shape[0]:
@@ -123,6 +124,26 @@ def cubset_to_mesh(cubset: CubSet) -> tuple[torch.Tensor, torch.Tensor, torch.Te
     return vertices.reshape(-1, 3), faces.reshape(-1, 3), vertex_colors
 
 
+def write_cubset_obj(cubset: CubSet, path: str | Path) -> None:
+    """Write a cubset as a Wavefront OBJ mesh with per-face colors."""
+    vertices, faces, vertex_colors = cubset_to_mesh(cubset)
+    vertices = vertices.detach().cpu().tolist()
+    faces = faces.detach().cpu().tolist()
+    vertex_colors = vertex_colors.detach().cpu().tolist()
+
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8") as file:
+        file.write("# d4d cubset mesh\n")
+        for vertex, color in zip(vertices, vertex_colors):
+            file.write(
+                f"v {vertex[0]:.9g} {vertex[1]:.9g} {vertex[2]:.9g} "
+                f"{color[0]:.9g} {color[1]:.9g} {color[2]:.9g}\n"
+            )
+        for face in faces:
+            file.write(f"f {face[0] + 1} {face[1] + 1} {face[2] + 1}\n")
+
+
 def render_mesh(
     vertices: torch.Tensor,
     faces: torch.Tensor,
@@ -131,6 +152,7 @@ def render_mesh(
     camera_pose: tuple[float | None, float | None] = (25.0, -60.0),
     image_size: int | tuple[int, int] = DEFAULT_IMAGE_SIZE,
     grayscale: bool = False,
+    blur_radius: float = 1e-2,
 ) -> torch.Tensor:
     """Render a mesh with PyTorch3D's differentiable rasterizer without lighting."""
     try:
@@ -161,6 +183,8 @@ def render_mesh(
     height, width = (image_size, image_size) if isinstance(image_size, int) else image_size
     if height <= 0 or width <= 0:
         raise ValueError("image_size must contain positive dimensions")
+    if blur_radius < 0:
+        raise ValueError("blur_radius must be non-negative")
 
     if grayscale:
         vertex_colors = torch.zeros_like(vertex_colors)
@@ -181,7 +205,7 @@ def render_mesh(
         cameras=cameras,
         raster_settings=RasterizationSettings(
             image_size=(height, width),
-            blur_radius=1e-4,
+            blur_radius=blur_radius,
             faces_per_pixel=50,
             perspective_correct=True,
         ),
@@ -202,6 +226,7 @@ def render_cubset_differentiable(
     image_size: int | tuple[int, int] = DEFAULT_IMAGE_SIZE,
     *,
     grayscale: bool = False,
+    blur_radius: float = 1e-2,
 ) -> torch.Tensor:
     """Create a cuboid mesh and render it through PyTorch3D."""
     vertices, faces, vertex_colors = cubset_to_mesh(cubset)
@@ -212,6 +237,7 @@ def render_cubset_differentiable(
         camera_pose=camera_pose,
         image_size=image_size,
         grayscale=grayscale,
+        blur_radius=blur_radius,
     )
 
 
@@ -219,15 +245,23 @@ def render_cubset_differentiable_rgb_image(
     cubset: CubSet,
     camera_pose: tuple[float | None, float | None] = (25.0, -60.0),
     image_size: int | tuple[int, int] = DEFAULT_IMAGE_SIZE,
+    *,
+    blur_radius: float = 1e-2,
 ) -> torch.Tensor:
     """Render a cubset as a differentiable RGB image."""
-    return render_cubset_differentiable(cubset, camera_pose, image_size)
+    return render_cubset_differentiable(
+        cubset, camera_pose, image_size, blur_radius=blur_radius
+    )
 
 
 def render_cubset_differentiable_grayscale_image(
     cubset: CubSet,
     camera_pose: tuple[float | None, float | None] = (25.0, -60.0),
     image_size: int | tuple[int, int] = DEFAULT_IMAGE_SIZE,
+    *,
+    blur_radius: float = 1e-2,
 ) -> torch.Tensor:
     """Render a cubset as a differentiable foreground mask."""
-    return render_cubset_differentiable(cubset, camera_pose, image_size, grayscale=True)
+    return render_cubset_differentiable(
+        cubset, camera_pose, image_size, grayscale=True, blur_radius=blur_radius
+    )
